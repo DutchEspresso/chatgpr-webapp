@@ -19,7 +19,7 @@ const DetailsPageSource: FunctionComponent<DetailsPageSourceType> = ({
           alt=""
           src="/isolation-mode1.svg"
         />
-        <div className="w-[406px] flex flex-row items-start justify-between [transform:_rotate(180deg)] max-w-full gap-[20px] z-[1]">
+        <div className="w-[406px] flex flex-row items-start justify-between max-w-full gap-[20px] z-[1]">
           <a className="[text-decoration:none] relative text-9xl capitalize font-bold text-transparent !bg-clip-text [background:linear-gradient(87.67deg,_#00baf4,_#8400eb)] [-webkit-background-clip:text] [-webkit-text-fill-color:transparent] inline-block min-w-[124px] whitespace-nowrap">
             ChatGPR
           </a>
