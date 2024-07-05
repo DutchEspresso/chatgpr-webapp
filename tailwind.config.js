@@ -23,6 +23,8 @@ module.exports = {
       },
       borderRadius: {
         "3xl": "22px",
+        "131xl": "150px",
+        "81xl": "100px",
       },
     },
     fontSize: {
@@ -36,6 +38,7 @@ module.exports = {
       "11xl": "30px",
       "9xl": "28px",
       "18xl": "37px",
+      "34xl": "53px",
       inherit: "inherit",
     },
     screens: {
