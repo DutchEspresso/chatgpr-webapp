@@ -11,7 +11,7 @@ const CollectionSources: FunctionComponent = () => {
           src="/isolation-mode.svg"
         />
         <header className="self-stretch flex flex-row items-start justify-start py-0 px-5 box-border max-w-full">
-          <nav className="m-0 w-[406px] flex flex-row items-start justify-start [transform:_rotate(180deg)] max-w-full z-[1]">
+          <nav className="m-0 w-[406px] flex flex-row items-start justify-start max-w-full z-[1]">
             <nav className="m-0 flex-1 flex flex-row items-start justify-between max-w-full gap-[20px] text-left text-lg text-gray-100 font-inter">
               <a className="[text-decoration:none] h-[20.4px] relative text-9xl capitalize font-bold text-transparent !bg-clip-text [background:linear-gradient(87.67deg,_#00baf4,_#8400eb)] [-webkit-background-clip:text] [-webkit-text-fill-color:transparent] flex items-center min-w-[124px] whitespace-nowrap">
                 ChatGPR
