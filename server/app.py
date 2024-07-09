@@ -198,7 +198,7 @@ async def extract_insights(full_text_paper):
         )
         llm = ChatAnthropic(
             model="claude-3-haiku-20240307",
-            api_key="ANTHROPIC_LLM_API_KEY",
+            api_key= process.env.ANTHROPIC_API_KEY,
             temperature=0,
         )
         chain = prompt | llm
