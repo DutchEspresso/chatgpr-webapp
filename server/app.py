@@ -43,11 +43,9 @@ JINA_API_KEY = os.getenv('JINA_API_KEY')
 # Initialize Supabase client with the specified URL and key
 supabase: Client = create_client(supabase_url, supabase_key)
 
-# Define a Pydantic model for user input
 class UserInput(BaseModel):
     user_input: str
 
-# Define a Pydantic model for papers
 class Paper(BaseModel):
     paper_id: str
     title: str
@@ -58,32 +56,25 @@ class Paper(BaseModel):
     tldr: Optional[str]
     insights: str
 
-# Define a general exception handler
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
-    # Log the error and return a JSON response with an error message
     logger.error(f"An error occurred: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": f"An unexpected error occurred: {str(exc)}"},
     )
 
-# Define an endpoint to process papers
 @app.post("/api/papers")
 async def process_papers(user_input: UserInput):
     try:
-        # Log the input and fetch papers
         logger.info(f"Processing papers for input: {user_input.user_input}")
         papers = await fetch_papers(user_input.user_input)
-
-        # Process the papers asynchronously
         tasks = [process_paper(paper) for paper in papers['data']]
         processed_papers = await asyncio.gather(*tasks, return_exceptions=True)
-
+        
         # Filter out any papers that failed to process
         valid_papers = [paper for paper in processed_papers if isinstance(paper, Paper)]
 
-        # If there are valid papers, upload them to Supabase in bulk or individually
         if valid_papers:
             try:
                 await bulk_upload_papers(valid_papers)
@@ -94,29 +85,22 @@ async def process_papers(user_input: UserInput):
         else:
             logger.warning("No valid papers to upload")
 
-        # Return a success message
         return {"message": f"Processed {len(valid_papers)} papers successfully"}
-
     except Exception as e:
-        # Log and raise the error if it occurs
         logger.error(f"Error in process_papers: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-# Define a function to fetch papers from the Semantic Scholar API
 async def fetch_papers(user_input: str):
+    params = {
+        'query': user_input,
+        'isOpenAccessPdf': True,
+        'limit': 4,
+        'fields': 'title,year,openAccessPdf,authors,tldr',
+    }
+    headers = {
+        "x-api-key": SEMANTIC_SCHOLAR_API_KEY,
+    }
     try:
-        # Construct the API request parameters and headers
-        params = {
-            'query': user_input,
-            'isOpenAccessPdf': True,
-            'limit': 5,
-            'fields': 'title,year,openAccessPdf,authors,tldr',
-        }
-        headers = {
-            "x-api-key": SEMANTIC_SCHOLAR_API_KEY,
-        }
-
-        # Send an asynchronous HTTP GET request and return the response JSON
         async with AsyncClient() as client:
             response = await client.get(
                 'https://api.semanticscholar.org/graph/v1/paper/search',
@@ -125,28 +109,18 @@ async def fetch_papers(user_input: str):
             )
             response.raise_for_status()
             return response.json()
-
     except Exception as e:
-        # Log and raise the error if it occurs
         logger.error(f"Error fetching papers: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f'Error fetching papers: {str(e)}')
 
-# Define a function to process a paper and extract insights
 async def process_paper(paper: dict) -> Paper:
     try:
-        # Extract the PDF URL and validate it
         url = paper.get('openAccessPdf', {}).get('url')
         if not url or 'pdf' not in url.lower():
             logger.warning(f"No valid PDF URL for paper: {paper.get('paperId')}")
             return None
-
-        # Fetch the full text of the paper from the Jina AI Reader API
         full_text = await fetch_full_text(url)
-
-        # Extract insights from the full text using the LangChain Anthropic model
         insights = await extract_insights(full_text)
-
-        # Create and return a Paper object with the extracted information
         return Paper(
             paper_id=paper['paperId'],
             title=paper['title'],
@@ -157,21 +131,38 @@ async def process_paper(paper: dict) -> Paper:
             tldr=paper['tldr']['text'] if paper.get('tldr') else None,
             insights=insights,
         )
-
     except Exception as e:
-        # Log and raise the error if it occurs
         logger.error(f"Error processing paper: {str(e)}", exc_info=True)
         return None
 
-# Define a function to extract insights from the full text using the LangChain Anthropic model
-async def extract_insights(full_text_paper):
+async def fetch_full_text(url: str) -> str:
+    if not url:
+        raise ValueError('URL is required')
+    headers = {
+        "X-Return-Format": "markdown",
+        "Authorization": "Bearer " + JINA_API_KEY,
+        "Accept": "application/json",
+    }
     try:
-        prompt = PromptTemplate.from_template (
+        async with AsyncClient() as client:
+            response = await client.get(f'https://r.jina.ai/{url}', headers=headers)
+            response.raise_for_status()
+            full_text_paper = response.text
+            if not full_text_paper:
+                raise ValueError('No content returned from Jina AI Reader')
+            return full_text_paper
+    except Exception as e:
+        logger.error(f"Error fetching full text: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f'Unable to fetch data from Reader API: {str(e)}')
+
+async def extract_insights(full_text_paper: str) -> str:
+    try:
+        prompt = PromptTemplate.from_template(
             "You are an AI assistant tasked with extracting surprising, insightful, and "
             "interesting information from academic text content. Your goal is to focus "
             "on insights related to advancements in research, academics, the impact of research "
             "on real life, and similar topics. Here is the full text of the academic paper "
-            "you will be analyzing: <academic_paper>\n{full_text_paper}\n</academic_paper> "
+            "you will be analyzing: <academic_paper>{full_text_paper}</academic_paper> "
             "Please follow these steps to analyze the content: 1. Extract a summary of the "
             "content in exactly 25 words. Present this under a 'SUMMARY:' heading. 2. "
             "Extract 10 to 20 of the most surprising, insightful, and/or interesting ideas "
@@ -193,6 +184,7 @@ async def extract_insights(full_text_paper):
             "FACTS sections. Remember to follow ALL these instructions when creating your "
             "output."
         )
+        
         llm = ChatAnthropic(
             model="claude-3-haiku-20240307",
             api_key= ANTHROPIC_API_KEY,
@@ -200,36 +192,30 @@ async def extract_insights(full_text_paper):
         )
         chain = prompt | llm
         response = await chain.ainvoke({'full_text_paper': full_text_paper})
-        
         return response.content
     except Exception as e:
-        print(f"Error extracting insights: {str(e)}")
+        logger.error(f"Error extracting insights: {str(e)}", exc_info=True)
         raise
 
-# Define a function to fetch the full text of a paper from the Jina AI Reader API
-async def fetch_full_text(url: str) -> str:
-    if not url:
-        raise ValueError('URL is required')
-
-    # Construct the API request headers
-    headers = {
-        "X-Return-Format": "markdown",
-        "Authorization": "Bearer " + JINA_API_KEY,
-        "Accept": "application/json",
-    }
+async def bulk_upload_papers(papers: List[Paper]):
     try:
-
-        # Send an asynchronous HTTP GET request and return the response text
-        async with AsyncClient() as client:
-            response = await client.get(f'https://r.jina.ai/{url}', headers=headers)
-            response.raise_for_status()
-            full_text_paper = response.text
-            if not full_text_paper:
-                raise ValueError('No content returned from Jina AI Reader')
-            return full_text_paper
-
+        # Convert the async operation to sync
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, lambda: supabase.table("papers").insert([paper.dict() for paper in papers]).execute())
+        logger.info(f"Bulk upload successful: {len(papers)} papers uploaded")
+        return response
     except Exception as e:
-        # Log and raise the error if it occurs
+        logger.error(f"Error during bulk upload: {str(e)}", exc_info=True)
+        raise
+
+async def individual_upload_paper(paper: Paper):
+    try:
+        # Convert the async operation to sync
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, lambda: supabase.table("papers").insert(paper.dict()).execute())
+        logger.info(f"Individual upload successful for paper: {paper.paper_id}")
+        return response
+    except Exception as e:
         logger.error(f"Error during individual upload for paper {paper.paper_id}: {str(e)}", exc_info=True)
         raise
 
