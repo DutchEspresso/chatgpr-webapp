@@ -94,7 +94,7 @@ async def fetch_papers(user_input: str):
     params = {
         'query': user_input,
         'isOpenAccessPdf': True,
-        'limit': 4,
+        'limit': 10,
         'fields': 'title,year,openAccessPdf,authors,tldr',
     }
     headers = {
