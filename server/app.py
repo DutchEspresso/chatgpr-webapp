@@ -13,6 +13,7 @@ from httpx import AsyncClient
 import logging
 from fastapi.responses import JSONResponse
 import os
+from dotenv import load_dotenv
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -30,9 +31,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# get api keys
+load_dotenv()
+supabase_url = os.getenv('SUPABASE_URL')
+supabase_key = os.getenv('SUPABASE_SECRET_KEY')
+SEMANTIC_SCHOLAR_API_KEY = os.getenv('SEMANTIC_SCHOLAR_API_KEY')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+JINA_API_KEY = os.getenv('JINA_API_KEY')
+
+
 # Initialize Supabase client with the specified URL and key
-supabase_url = process.env.SUPABASE_URL
-supabase_key = process.env.SUPABASE_SECRET_KEY
 supabase: Client = create_client(supabase_url, supabase_key)
 
 # Define a Pydantic model for user input
@@ -105,7 +113,7 @@ async def fetch_papers(user_input: str):
             'fields': 'title,year,openAccessPdf,authors,tldr',
         }
         headers = {
-            "x-api-key": process.env.SEMANTIC_SCHOLAR_API_KEY,
+            "x-api-key": SEMANTIC_SCHOLAR_API_KEY,
         }
 
         # Send an asynchronous HTTP GET request and return the response JSON
@@ -155,18 +163,7 @@ async def process_paper(paper: dict) -> Paper:
         logger.error(f"Error processing paper: {str(e)}", exc_info=True)
         return None
 
-# Define a function to fetch the full text of a paper from the Jina AI Reader API
-async def fetch_full_text(url: str) -> str:
-    if not url:
-        raise ValueError('URL is required')
-
-    # Construct the API request headers
-    headers = {
-        "X-Return-Format": "markdown",
-        "Authorization": "Bearer ", process.env.JINA_API_KEY,
-        "Accept": "application/json",
-    }
-
+# Define a function to extract insights from the full text using the LangChain Anthropic model
 async def extract_insights(full_text_paper):
     try:
         prompt = PromptTemplate.from_template (
@@ -198,7 +195,7 @@ async def extract_insights(full_text_paper):
         )
         llm = ChatAnthropic(
             model="claude-3-haiku-20240307",
-            api_key= process.env.ANTHROPIC_API_KEY,
+            api_key= ANTHROPIC_API_KEY,
             temperature=0,
         )
         chain = prompt | llm
@@ -208,8 +205,20 @@ async def extract_insights(full_text_paper):
     except Exception as e:
         print(f"Error extracting insights: {str(e)}")
         raise
-    
+
+# Define a function to fetch the full text of a paper from the Jina AI Reader API
+async def fetch_full_text(url: str) -> str:
+    if not url:
+        raise ValueError('URL is required')
+
+    # Construct the API request headers
+    headers = {
+        "X-Return-Format": "markdown",
+        "Authorization": "Bearer " + JINA_API_KEY,
+        "Accept": "application/json",
+    }
     try:
+
         # Send an asynchronous HTTP GET request and return the response text
         async with AsyncClient() as client:
             response = await client.get(f'https://r.jina.ai/{url}', headers=headers)
