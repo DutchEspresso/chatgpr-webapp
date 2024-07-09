@@ -12,6 +12,7 @@ import uvicorn
 from httpx import AsyncClient
 import logging
 from fastapi.responses import JSONResponse
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -30,8 +31,8 @@ app.add_middleware(
 )
 
 # Initialize Supabase client with the specified URL and key
-supabase_url = "https://huuhbsgpqtiyirmrsdkp.supabase.co"
-supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1dWhic2dwcXRpeWlybXJzZGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTg3MTk4NzEsImV4cCI6MjAzNDI5NTg3MX0.xBGeGxfPPjb7hfMHGrpxJduKwoplLzPrsL7QwulWveg"
+supabase_url = process.env.SUPABASE_URL
+supabase_key = process.env.SUPABASE_SECRET_KEY
 supabase: Client = create_client(supabase_url, supabase_key)
 
 # Define a Pydantic model for user input
@@ -104,7 +105,7 @@ async def fetch_papers(user_input: str):
             'fields': 'title,year,openAccessPdf,authors,tldr',
         }
         headers = {
-            "x-api-key": "xx1a0cYzE536dK6qBC4d14diuH1trJbv6WpTpgbI",
+            "x-api-key": process.env.SEMANTIC_SCHOLAR_API_KEY,
         }
 
         # Send an asynchronous HTTP GET request and return the response JSON
@@ -162,10 +163,52 @@ async def fetch_full_text(url: str) -> str:
     # Construct the API request headers
     headers = {
         "X-Return-Format": "markdown",
-        "Authorization": "Bearer jina_a7e0524dfc814bd7aaf4f2f88e338d5eu8RJfMoRHDyufnsip_LzJDIa4XA0",
+        "Authorization": "Bearer ", process.env.JINA_API_KEY,
         "Accept": "application/json",
     }
 
+async def extract_insights(full_text_paper):
+    try:
+        prompt = PromptTemplate.from_template (
+            "You are an AI assistant tasked with extracting surprising, insightful, and "
+            "interesting information from academic text content. Your goal is to focus "
+            "on insights related to advancements in research, academics, the impact of research "
+            "on real life, and similar topics. Here is the full text of the academic paper "
+            "you will be analyzing: <academic_paper>\n{full_text_paper}\n</academic_paper> "
+            "Please follow these steps to analyze the content: 1. Extract a summary of the "
+            "content in exactly 25 words. Present this under a 'SUMMARY:' heading. 2. "
+            "Extract 10 to 20 of the most surprising, insightful, and/or interesting ideas "
+            "from the input. Present these under an 'IDEAS:' heading. If there are fewer "
+            "than 20, collect all of them. Ensure you extract at least 10 ideas. Each idea "
+            "should be exactly 15 words long. 3. Extract 10 to 20 of the best insights from "
+            "the input and from a combination of the raw input and the IDEAS you've already "
+            "extracted. Present these under an 'INSIGHTS:' heading. These insights should be "
+            "more refined, more insightful, and more abstracted versions of the best ideas in "
+            "the content. Each insight should be exactly 15 words long. 4. Extract 10 to "
+            "20 of the most surprising, insightful, and/or interesting valid facts mentioned "
+            "in the content. Present these under a 'FACTS:' heading. Each fact should be "
+            "exactly 15 words long. Output formatting instructions: - Ensure the output is "
+            "a single string, using \\n for line breaks and \\n\\n for paragraphs. - Use "
+            "bulleted lists for IDEAS, INSIGHTS, and FACTS sections. - Do not use numbered "
+            "lists. - Do not repeat ideas, quotes, or facts. - Do not start items with the "
+            "same opening words. - Do not give warnings or notes; only output the requested "
+            "sections. - Ensure you extract at least 10 items each for IDEAS, INSIGHTS, and "
+            "FACTS sections. Remember to follow ALL these instructions when creating your "
+            "output."
+        )
+        llm = ChatAnthropic(
+            model="claude-3-haiku-20240307",
+            api_key="ANTHROPIC_LLM_API_KEY",
+            temperature=0,
+        )
+        chain = prompt | llm
+        response = await chain.ainvoke({'full_text_paper': full_text_paper})
+        
+        return response.content
+    except Exception as e:
+        print(f"Error extracting insights: {str(e)}")
+        raise
+    
     try:
         # Send an asynchronous HTTP GET request and return the response text
         async with AsyncClient() as client:
