@@ -140,7 +140,7 @@ async def fetch_full_text(url: str) -> str:
         raise ValueError('URL is required')
     headers = {
         "X-Return-Format": "markdown",
-        "Authorization": 'Bearer {jina_api} ,
+        "Authorization": 'Bearer {jina_api}',
         "Accept": "application/json",
     }
     try:
