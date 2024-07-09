@@ -37,7 +37,7 @@ supabase_url = os.getenv('SUPABASE_URL')
 supabase_key = os.getenv('SUPABASE_SECRET_KEY')
 SEMANTIC_SCHOLAR_API_KEY = os.getenv('SEMANTIC_SCHOLAR_API_KEY')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
-JINA_API_KEY = os.getenv('JINA_API_KEY')
+jina_api = os.getenv('JINA_API_KEY')
 
 
 # Initialize Supabase client with the specified URL and key
@@ -140,7 +140,7 @@ async def fetch_full_text(url: str) -> str:
         raise ValueError('URL is required')
     headers = {
         "X-Return-Format": "markdown",
-        "Authorization": "Bearer " + JINA_API_KEY,
+        "Authorization": 'Bearer {jina_api} ,
         "Accept": "application/json",
     }
     try:
